@@ -1,28 +1,19 @@
 /*
- * TTGOV2 boards GPIO33 must be externaly connected to lora module DIO1 and GPIO32 should be connected to DIO2.
- * 
- * This uses https://github.com/VekotinVerstas/arduino-lmic as lora library. Install it to your arduino/library first.
- */
- 
-#include "mhz19.h"
+   TTGOV2 boards GPIO33 must be externaly connected to lora module DIO1 and GPIO32 should be connected to DIO2.
+
+   This uses https://github.com/VekotinVerstas/arduino-lmic as lora library. Install it to your arduino/library first.
+*/
+
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <lmic.h>
 #include <hal/hal.h>
 #include "settings.h"
-#ifdef useBME
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
 Adafruit_BME280 bme;
 bool bmestatus;
-#endif
-#ifdef useDHT
-#include <DHT.h>
-#define DHTPIN 15
-#define DHTTYPE DHT22
-DHT dht(DHTPIN, DHTTYPE);
-#endif
 
 #define LEDPIN 2  // Used to blink blue led and to signal watchtog chip that all is well - while sending data
 
@@ -38,7 +29,7 @@ static osjob_t sendjob;
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
-const unsigned TX_INTERVAL = 5*60;
+const unsigned TX_INTERVAL = 5 * 60;
 char TTN_response[30];
 
 void IRAM_ATTR resetModule() {
@@ -49,15 +40,11 @@ void IRAM_ATTR resetModule() {
 
 void setup() {
   Serial.begin(115200);
-  
   timer = timerBegin(0, 8000, true);                  //timer 0, div 80
   timerAttachInterrupt(timer, &resetModule, true);  //attach callback
   timerAlarmWrite(timer, wdtTimeout * 1000, false); //set time in us
   timerAlarmEnable(timer);
   sensor.begin(9600, SERIAL_8N1, 23, 22);
-#ifdef useDHT
-  dht.begin();
-#endif
 
   bmestart(13, 15);
   sprintf(s_id, "ESP_%02X", BOXNUM);
@@ -77,7 +64,7 @@ void setup() {
   Serial.printf("LORA dev eui: %01X%01X%01X%01X%01X%01X%01X%01X\n", DEVEUI[0], DEVEUI[1], DEVEUI[2], DEVEUI[3], DEVEUI[4], DEVEUI[5], DEVEUI[6], DEVEUI[7]);
   // Use the Blue pin to signal transmission.
   pinMode(LEDPIN, OUTPUT);
-  
+
   // LMIC init
   os_init();
 
@@ -114,48 +101,12 @@ void loop() {
   os_runloop_once();
 }
 
-static bool exchange_command(uint8_t cmd, uint8_t data[], int timeout) {
-  // create command buffer
-  uint8_t buf[9];
-  int len = prepare_tx(cmd, data, buf, sizeof(buf));
-
-  // send the command
-  sensor.write(buf, len);
-
-  // wait for response
-  long start = millis();
-  while ((millis() - start) < timeout) {
-    if (sensor.available() > 0) {
-      uint8_t b = sensor.read();
-      if (process_rx(b, cmd, data)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-static bool read_temp_co2(int *co2, int *temp) {
-  uint8_t data[] = {0, 0, 0, 0, 0, 0};
-  bool result = exchange_command(0x86, data, 3000);
-  if (result) {
-    *co2 = (data[0] << 8) + data[1];
-    *temp = data[2] - 40;
-    char raw[32];
-    sprintf(raw, "Raw co2 sensor data: %02X %02X %02X %02X %02X %02X", data[0], data[1], data[2], data[3], data[4], data[5]);
-    Serial.println(raw);
-  }
-  return result;
-}
-
 void bmestart(int pin1, int pin2) {
-#ifdef useBME
   Wire.begin(pin1, pin2); //13, 15
   bmestatus = bme.begin(0x76);
   if (!bmestatus) {
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
   }
-#endif
 }
 
 void os_getDevEui(u1_t* buf) {
@@ -179,38 +130,16 @@ void do_send(osjob_t* j) {
   digitalWrite(LEDPIN, HIGH);
   timerWrite(timer, 0); //reset timer (feed watchdog)
 
-  int co2=0, temp=0;
-  float Temp=0, hum=0;
+  int co2 = 0, temp = 0;
+  float Temp = 0, hum = 0;
 
-#ifdef useBME
   if (bmestatus) {
     Temp = bme.readTemperature();
     hum = bme.readHumidity();
-    }
-#endif
-
-#ifdef useDHT
-  Temp = dht.readTemperature();
-  hum = dht.readHumidity();
-  if (isnan(Temp) || isnan(hum)) {
-    Serial.println("Failed to read from DHT sensor!");
-    Temp = 0;
-    hum = 0;
   }
-#endif
 
-  if (!read_temp_co2(&co2, &temp)) {
-    Serial.println("Co2 read failed.");
-    co2=0;
-    temp=0;
-    //return;
-  }
 
   Serial.println("*****************************************************************");
-  Serial.print("CO2:");
-  Serial.println(co2, DEC);
-  Serial.print("TEMP(CO2-sensori)");
-  Serial.println(temp);
   Serial.print("TEMP: ");
   Serial.println(Temp);
   Serial.print("HUM: ");
@@ -223,12 +152,10 @@ void do_send(osjob_t* j) {
   DynamicJsonBuffer jsonBuffer(200);
   JsonObject& root = jsonBuffer.createObject();
   root["id"] = s_id;
-  root["sensor"] = "BKS";
+  root["sensor"] = "DP";
 
   JsonObject& data = root.createNestedObject("data");
-  data["co2"] = co2;
-  data["temp1"] = temp;
-  data["temp2"] = Temp;
+  data["temp"] = Temp;
   data["hum"] = hum;
 
   root.printTo(message);
@@ -267,6 +194,7 @@ void onEvent (ev_t ev) {
     }
     // Schedule next transmission
     Serial.println("Schedule next transmission");
+    Serial.flush();
     os_setTimedCallback(&sendjob, os_getTime() + sec2osticks(TX_INTERVAL), do_send);
   }
 }
