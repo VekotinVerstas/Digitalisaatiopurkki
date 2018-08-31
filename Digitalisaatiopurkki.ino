@@ -13,7 +13,7 @@
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
 Adafruit_BME280 bme;
-bool bmestatus;
+bool bmestatus = 0;
 
 #define LEDPIN 2  // Used to blink blue led and to signal watchtog chip that all is well - while sending data
 
@@ -102,11 +102,12 @@ void loop() {
 }
 
 void bmestart(int pin1, int pin2) {
-  Wire.begin(pin1, pin2); //13, 15
+  Wire.begin(pin1, pin2);
   bmestatus = bme.begin(0x76);
   if (!bmestatus) {
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
   }
+  delay( 500 );
 }
 
 void os_getDevEui(u1_t* buf) {
@@ -130,14 +131,10 @@ void do_send(osjob_t* j) {
   digitalWrite(LEDPIN, HIGH);
   timerWrite(timer, 0); //reset timer (feed watchdog)
 
-  int co2 = 0, temp = 0;
   float Temp = 0, hum = 0;
 
-  if (bmestatus) {
-    Temp = bme.readTemperature();
-    hum = bme.readHumidity();
-  }
-
+  Temp = bme.readTemperature();
+  hum = bme.readHumidity();
 
   Serial.println("*****************************************************************");
   Serial.print("TEMP: ");
@@ -148,11 +145,14 @@ void do_send(osjob_t* j) {
 
   hum = round(hum);
   char message[110];
+  char buff[20];
+  sprintf( buff, "%01X%01X%01X%01X%01X%01X%01X%01X", DEVEUI[0], DEVEUI[1], DEVEUI[2], DEVEUI[3], DEVEUI[4], DEVEUI[5], DEVEUI[6], DEVEUI[7]);
+
 
   DynamicJsonBuffer jsonBuffer(200);
   JsonObject& root = jsonBuffer.createObject();
-  root["id"] = s_id;
   root["sensor"] = "DP";
+  root["mac"] = buff;
 
   JsonObject& data = root.createNestedObject("data");
   data["temp"] = Temp;
