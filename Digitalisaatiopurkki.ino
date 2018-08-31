@@ -5,13 +5,14 @@
 */
 
 #include <ArduinoJson.h>
-#include <Wire.h>
 #include <SPI.h>
 #include <lmic.h>
 #include <hal/hal.h>
 #include "settings.h"
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
+#include <SSD1306.h>
+
 Adafruit_BME280 bme;
 bool bmestatus = 0;
 
@@ -21,7 +22,9 @@ int wt = 0;
 const int wdtTimeout = 12000;  //time in ms to trigger the watchdog
 hw_timer_t *timer = NULL;
 
-HardwareSerial sensor(1);
+SSD1306 display(0x3c, 21, 22);
+
+float Temp = 0, hum = 0;
 
 static char esp_id[16];
 unsigned int counter = 0;
@@ -44,9 +47,12 @@ void setup() {
   timerAttachInterrupt(timer, &resetModule, true);  //attach callback
   timerAlarmWrite(timer, wdtTimeout * 1000, false); //set time in us
   timerAlarmEnable(timer);
-  sensor.begin(9600, SERIAL_8N1, 23, 22);
 
-  bmestart(13, 15);
+  display.init();
+  display.flipScreenVertically();
+  display.setFont(ArialMT_Plain_10);
+
+  bmestart(21, 22);
   sprintf(s_id, "ESP_%02X", BOXNUM);
   Serial.print("Co2TTGO name: ");
   Serial.println(s_id);
@@ -95,10 +101,32 @@ void setup() {
 
   // Start job
   do_send(&sendjob);
+
+  display.init();
+  //display.flipScreenVertically();
+  display.setFont(ArialMT_Plain_10);
 }
 
 void loop() {
   os_runloop_once();
+  displaybmedata(Temp, hum);
+}
+
+void displaybmedata(float Temp, float hum) {
+  char buf[5];
+  display.clear();
+  display.setTextAlignment(TEXT_ALIGN_LEFT);
+  display.setFont(ArialMT_Plain_24);
+
+  display.drawString(0, 0, "Lämpö: ");
+  itoa(Temp, buf, 10);
+  display.drawString(95, 0, buf);
+
+  display.drawString(0, 26, "Kosteus: ");
+  itoa(hum, buf, 10);
+  display.drawString(95, 26, buf);
+
+  display.display();
 }
 
 void bmestart(int pin1, int pin2) {
@@ -131,11 +159,9 @@ void do_send(osjob_t* j) {
   digitalWrite(LEDPIN, HIGH);
   timerWrite(timer, 0); //reset timer (feed watchdog)
 
-  float Temp = 0, hum = 0;
-
   Temp = bme.readTemperature();
   hum = bme.readHumidity();
-
+  //displaybmedata( Temp, hum );
   Serial.println("*****************************************************************");
   Serial.print("TEMP: ");
   Serial.println(Temp);
