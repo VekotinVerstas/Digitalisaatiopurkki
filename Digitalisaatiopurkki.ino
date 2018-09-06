@@ -48,10 +48,6 @@ void setup() {
   timerAlarmWrite(timer, wdtTimeout * 1000, false); //set time in us
   timerAlarmEnable(timer);
 
-  display.init();
-  display.flipScreenVertically();
-  display.setFont(ArialMT_Plain_10);
-
   bmestart(21, 22);
   sprintf(s_id, "ESP_%02X", BOXNUM);
   Serial.print("Co2TTGO name: ");
@@ -103,8 +99,7 @@ void setup() {
   do_send(&sendjob);
 
   display.init();
-  //display.flipScreenVertically();
-  display.setFont(ArialMT_Plain_10);
+  display.flipScreenVertically();
 }
 
 void loop() {
