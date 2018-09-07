@@ -23,8 +23,7 @@ const int wdtTimeout = 12000;  //time in ms to trigger the watchdog
 hw_timer_t *timer = NULL;
 
 SSD1306 display(0x3c, 21, 22);
-
-float Temp = 0, hum = 0;
+float temp = 0, hum = 0;
 
 static char esp_id[16];
 unsigned int counter = 0;
@@ -104,17 +103,17 @@ void setup() {
 
 void loop() {
   os_runloop_once();
-  displaybmedata(Temp, hum);
+  displaybmedata( temp, hum );
 }
 
-void displaybmedata(float Temp, float hum) {
+void displaybmedata(float temp, float hum) {
   char buf[5];
+  hum = round(hum);
   display.clear();
-  display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_24);
 
   display.drawString(0, 0, "Lämpö: ");
-  itoa(Temp, buf, 10);
+  itoa(temp, buf, 10);
   display.drawString(95, 0, buf);
 
   display.drawString(0, 26, "Kosteus: ");
@@ -154,32 +153,18 @@ void do_send(osjob_t* j) {
   digitalWrite(LEDPIN, HIGH);
   timerWrite(timer, 0); //reset timer (feed watchdog)
 
-  Temp = bme.readTemperature();
+  temp = bme.readTemperature();
   hum = bme.readHumidity();
-  //displaybmedata( Temp, hum );
   Serial.println("*****************************************************************");
   Serial.print("TEMP: ");
-  Serial.println(Temp);
+  Serial.println(temp);
   Serial.print("HUM: ");
   Serial.println(hum, DEC);
-  Serial.println("*****************************************************************");
+  Serial.println("*****************************************************************");  
 
-  hum = round(hum);
-  char message[110];
-  char buff[20];
-  sprintf( buff, "%01X%01X%01X%01X%01X%01X%01X%01X", DEVEUI[0], DEVEUI[1], DEVEUI[2], DEVEUI[3], DEVEUI[4], DEVEUI[5], DEVEUI[6], DEVEUI[7]);
-
-
-  DynamicJsonBuffer jsonBuffer(200);
-  JsonObject& root = jsonBuffer.createObject();
-  root["sensor"] = "DP";
-  root["mac"] = buff;
-
-  JsonObject& data = root.createNestedObject("data");
-  data["temp"] = Temp;
-  data["hum"] = hum;
-
-  root.printTo(message);
+  char message[25];
+  //char buff[25];
+  sprintf( message, "temp=%.2f,hum=%.2f", temp, hum );
 
   Serial.println(message);
   digitalWrite(LEDPIN, LOW);
