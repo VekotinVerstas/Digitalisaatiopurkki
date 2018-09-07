@@ -24,6 +24,7 @@ hw_timer_t *timer = NULL;
 
 SSD1306 display(0x3c, 21, 22);
 float temp = 0, hum = 0;
+float tempold = 0, humold = 0;
 
 static char esp_id[16];
 unsigned int counter = 0;
@@ -98,7 +99,7 @@ void setup() {
   do_send(&sendjob);
 
   display.init();
-  display.flipScreenVertically();
+  //display.flipScreenVertically();
 }
 
 void loop() {
@@ -107,6 +108,10 @@ void loop() {
 }
 
 void displaybmedata(float temp, float hum) {
+  if( temp == tempold && hum == humold ) return; // Do not update if not nessesary
+  tempold=temp;
+  humold=hum;
+  
   char buf[5];
   hum = round(hum);
   display.clear();
