@@ -4,14 +4,13 @@
    This uses https://github.com/VekotinVerstas/arduino-lmic as lora library. Install it to your arduino/library first.
 */
 
-#include <ArduinoJson.h>
 #include <SPI.h>
 #include <lmic.h>
 #include <hal/hal.h>
 #include "settings.h"
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
-#include <SSD1306.h>
+
 
 Adafruit_BME280 bme;
 bool bmestatus = 0;
@@ -22,7 +21,6 @@ int wt = 0;
 const int wdtTimeout = 12000;  //time in ms to trigger the watchdog
 hw_timer_t *timer = NULL;
 
-SSD1306 display(0x3c, 21, 22);
 float temp = 0, hum = 0;
 float tempold = 0, humold = 0;
 
@@ -36,7 +34,7 @@ const unsigned TX_INTERVAL = 5 * 60;
 char TTN_response[30];
 
 void IRAM_ATTR resetModule() {
-  Serial.print(F("SW watchdog time out: "));
+  Serial.print(F("SW reset WD or i2c fail: "));
   ets_printf("reboot\n");
   esp_restart_noos();
 }
@@ -48,12 +46,12 @@ void setup() {
   timerAlarmWrite(timer, wdtTimeout * 1000, false); //set time in us
   timerAlarmEnable(timer);
 
-  bmestart(21, 22);
+  bmestart(13, 15);
   sprintf(s_id, "ESP_%02X", BOXNUM);
-  Serial.print("Co2TTGO name: ");
+  Serial.print("Digitalisaatio purkkki name: ");
   Serial.println(s_id);
 
-  Serial.print("Co2TTGO version: ");
+  Serial.print("Version: ");
   Serial.println(version);
 
   uint64_t chipid;
@@ -98,15 +96,15 @@ void setup() {
   // Start job
   do_send(&sendjob);
 
-  display.init();
+  //display.init();
   //display.flipScreenVertically();
 }
 
 void loop() {
   os_runloop_once();
-  displaybmedata( temp, hum );
+  //displaybmedata( temp, hum );
 }
-
+/*
 void displaybmedata(float temp, float hum) {
   if( temp == tempold && hum == humold ) return; // Do not update if not nessesary
   tempold=temp;
@@ -117,7 +115,7 @@ void displaybmedata(float temp, float hum) {
   display.clear();
   display.setFont(ArialMT_Plain_24);
 
-  display.drawString(0, 0, "Lämpö: ");
+  //display.drawString(0, 0, "Lämpö: ");
   itoa(temp, buf, 10);
   display.drawString(95, 0, buf);
 
@@ -127,7 +125,7 @@ void displaybmedata(float temp, float hum) {
 
   display.display();
 }
-
+*/
 void bmestart(int pin1, int pin2) {
   Wire.begin(pin1, pin2);
   bmestatus = bme.begin(0x76);
@@ -166,6 +164,11 @@ void do_send(osjob_t* j) {
   Serial.print("HUM: ");
   Serial.println(hum, DEC);
   Serial.println("*****************************************************************");  
+
+  if( temp < -50 ) {
+    Serial.println("BME error - reboot.");
+    resetModule();
+  }
 
   char message[25];
   //char buff[25];
