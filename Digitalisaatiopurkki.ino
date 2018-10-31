@@ -10,7 +10,10 @@
 #include "settings.h"
 #include <Adafruit_BME280.h>
 #include <Adafruit_Sensor.h>
+#include <Adafruit_SSD1306.h>
 
+#define OLED_RESET 4
+Adafruit_SSD1306 display(OLED_RESET);
 
 Adafruit_BME280 bme;
 bool bmestatus = 0;
@@ -30,7 +33,7 @@ static osjob_t sendjob;
 
 // Schedule TX every this many seconds (might become longer due to duty
 // cycle limitations).
-const unsigned TX_INTERVAL = 5 * 60;
+const unsigned TX_INTERVAL = 0.5 * 60;
 char TTN_response[30];
 
 void IRAM_ATTR resetModule() {
@@ -46,7 +49,6 @@ void setup() {
   timerAlarmWrite(timer, wdtTimeout * 1000, false); //set time in us
   timerAlarmEnable(timer);
 
-  bmestart(13, 15);
   sprintf(s_id, "ESP_%02X", BOXNUM);
   Serial.print("Digitalisaatio purkkki name: ");
   Serial.println(s_id);
@@ -93,39 +95,41 @@ void setup() {
   //LMIC_setDrTxpow(DR_SF11,14);
   LMIC_setDrTxpow(DR_SF9, 14);
 
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);  // initialize with the I2C addr 0x3C (for the 128x32)
+  display.clearDisplay();
+  display.display();
+  delay(10);
+  
+  bmestart(21, 22);
+
   // Start job
   do_send(&sendjob);
-
-  //display.init();
-  //display.flipScreenVertically();
 }
 
 void loop() {
   os_runloop_once();
-  //displaybmedata( temp, hum );
+  displaybmedata( temp, hum );
 }
-/*
+
 void displaybmedata(float temp, float hum) {
-  if( temp == tempold && hum == humold ) return; // Do not update if not nessesary
-  tempold=temp;
-  humold=hum;
-  
+  if ( temp == tempold && hum == humold ) return; // Do not update if not nessesary
+  tempold = temp;
+  humold = hum;
+
   char buf[5];
   hum = round(hum);
-  display.clear();
-  display.setFont(ArialMT_Plain_24);
 
-  //display.drawString(0, 0, "Lämpö: ");
-  itoa(temp, buf, 10);
-  display.drawString(95, 0, buf);
-
-  display.drawString(0, 26, "Kosteus: ");
-  itoa(hum, buf, 10);
-  display.drawString(95, 26, buf);
-
+  display.setTextSize(1);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.clearDisplay();
+  display.print("Lampo: ");
+  display.println(temp);
+  display.print("Kosteus: ");
+  display.println(hum);
   display.display();
 }
-*/
+
 void bmestart(int pin1, int pin2) {
   Wire.begin(pin1, pin2);
   bmestatus = bme.begin(0x76);
@@ -163,9 +167,9 @@ void do_send(osjob_t* j) {
   Serial.println(temp);
   Serial.print("HUM: ");
   Serial.println(hum, DEC);
-  Serial.println("*****************************************************************");  
+  Serial.println("*****************************************************************");
 
-  if( temp < -50 ) {
+  if ( temp < -50 ) {
     Serial.println("BME error - reboot.");
     resetModule();
   }
